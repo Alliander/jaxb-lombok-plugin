@@ -14,15 +14,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-
-public class LombokPlugin extends Plugin  {
+public class LombokPlugin extends Plugin {
 
     public static final String OPTION_NAME = "Xlombok";
     private final Command defaultCommand;
-    private final Map<String,Command> commands = new HashMap<>();
+    private final Map<String, Command> commands = new HashMap<>();
 
     public LombokPlugin() {
-        defaultCommand = new LombokCommand("Data", Getter.class, Setter.class, EqualsAndHashCode.class, ToString.class);
+        defaultCommand = new LombokCommand("Data", Data.class);
 
         addCommand(defaultCommand);
         addLombokCommand("Getter", Getter.class);
@@ -45,12 +44,32 @@ public class LombokPlugin extends Plugin  {
         addCommand(new Command("removeGeneratedSourceSetters", "remove Setters from JAXB generated sources") {
             @Override
             public void editGeneratedClass(JDefinedClass generatedClass) {
-                removeGeneratedSourceSetters(generatedClass);
+                removeGeneratedMethods(generatedClass, "set");
+                generatedClass.annotate(Setter.class);
+            }
+        });
+
+        addCommand(new Command("removeGeneratedSourceGetters", "remove Setters from JAXB generated sources") {
+            @Override
+            public void editGeneratedClass(JDefinedClass generatedClass) {
+                removeGeneratedMethods(generatedClass, "get");
+                generatedClass.annotate(Getter.class);
+            }
+        });
+
+        addCommand(new Command("removeGeneratedSourceGettersSetters", "remove Setters from JAXB generated sources") {
+            @Override
+            public void editGeneratedClass(JDefinedClass generatedClass) {
+                removeGeneratedMethods(generatedClass, "get");
+                generatedClass.annotate(Getter.class);
+
+                removeGeneratedMethods(generatedClass, "set");
+                generatedClass.annotate(Setter.class);
             }
         });
     }
 
-    private void addLombokCommand(String name, Class ... lombokAnnotation) {
+    private void addLombokCommand(String name, Class... lombokAnnotation) {
         addCommand(new LombokCommand(name, lombokAnnotation));
     }
 
@@ -93,29 +112,46 @@ public class LombokPlugin extends Plugin  {
         // for each generated classes
         for (ClassOutline generatedClassOutline : outline.getClasses()) {
             JDefinedClass generatedClass = generatedClassOutline.implClass;
-            if (!isAbstractClass(generatedClass) &&
-                    !generatedClass.fields().isEmpty()) {
-                boolean commandExecuted = false;
-                for (Command command : commands.values()) {
-                    if (command.isEnabled()) {
-                        command.editGeneratedClass(generatedClass);
-                        commandExecuted = true;
-                    }
-                }
-
-                if (!commandExecuted) {
-                    defaultCommand.editGeneratedClass(generatedClass);
-                }
-            }
+            processClass(generatedClass);
         }
         return true;
     }
 
-    private void removeGeneratedSourceSetters(JDefinedClass generatedClass) {
+    protected void processClass(JDefinedClass generatedClass) {
+        if (commands.get("-" + OPTION_NAME + ":" + "Data").isEnabled()) {
+            commands.get("-" + OPTION_NAME + ":" + "Getter").setEnabled(false);
+            commands.get("-" + OPTION_NAME + ":" + "Setter").setEnabled(false);
+            commands.get("-" + OPTION_NAME + ":" + "EqualsAndHashCode").setEnabled(false);
+            commands.get("-" + OPTION_NAME + ":" + "ToString").setEnabled(false);
+        } else if (commands.get("-" + OPTION_NAME + ":" + "Getter").isEnabled() && commands.get("-" + OPTION_NAME + ":" + "Setter").isEnabled() && commands.get("-" + OPTION_NAME + ":" + "EqualsAndHashCode").isEnabled() && commands.get("-" + OPTION_NAME + ":" + "ToString").isEnabled()) {
+            commands.get("-" + OPTION_NAME + ":" + "Getter").setEnabled(false);
+            commands.get("-" + OPTION_NAME + ":" + "Setter").setEnabled(false);
+            commands.get("-" + OPTION_NAME + ":" + "EqualsAndHashCode").setEnabled(false);
+            commands.get("-" + OPTION_NAME + ":" + "ToString").setEnabled(false);
+
+            commands.get("-" + OPTION_NAME + ":" + "Data").setEnabled(true);
+        }
+
+        if (!isAbstractClass(generatedClass) && !generatedClass.fields().isEmpty()) {
+            boolean commandExecuted = false;
+            for (Command command : commands.values()) {
+                if (command.isEnabled()) {
+                    command.editGeneratedClass(generatedClass);
+                    commandExecuted = true;
+                }
+            }
+
+            if (!commandExecuted) {
+                defaultCommand.editGeneratedClass(generatedClass);
+            }
+        }
+    }
+
+    protected void removeGeneratedMethods(JDefinedClass generatedClass, String methodPrefix) {
         List<JMethod> setters = new ArrayList<>();
         // find methods to remove
         for (JMethod method : generatedClass.methods()) {
-            if (method.name().startsWith("set")) {
+            if (method.name().startsWith(methodPrefix)) {
                 // TODO check return type void?
                 setters.add(method);
             }
