@@ -1,21 +1,30 @@
 package pl.radical.jaxb;
 
-import com.sun.codemodel.JDefinedClass;
-import lombok.*;
-import org.apache.commons.lang3.StringUtils;
-
-import pl.radical.jaxb.actions.LombokPluginAction;
-import pl.radical.jaxb.actions.RemoveGetters;
-import pl.radical.jaxb.actions.RemoveGettersAndSetters;
-import pl.radical.jaxb.actions.RemoveSetters;
-
 import java.lang.annotation.Annotation;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.apache.commons.lang3.StringUtils;
+
+import com.sun.codemodel.JDefinedClass;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
+import pl.radical.jaxb.actions.LombokPluginAction;
+import pl.radical.jaxb.actions.RemoveGetters;
+import pl.radical.jaxb.actions.RemoveGettersAndSetters;
+import pl.radical.jaxb.actions.RemoveSetters;
+
 /**
- * @author <a href="mailto:lukasz.rzanek@radical.com.pl">Łukasz Rżanek</a>
+ * @author <a href="mailto:lukasz.rzanek@radical.com.pl">Å�ukasz
+ *         RÅ¼anek</a>
  * @since 07.10.2017
  */
 @AllArgsConstructor
@@ -30,41 +39,50 @@ public enum LombokCommand {
     ALLARGSCONSTRUCTOR(Arrays.asList(AllArgsConstructor.class), null),
     BUILDER(Arrays.asList(Builder.class, AllArgsConstructor.class, NoArgsConstructor.class), null);
 
-    @Getter
-    private List<Class<? extends Annotation>> annotations;
+	@Getter
+	private List<Class<? extends Annotation>> annotations;
 
-    private List<LombokPluginAction> actions;
+	private List<LombokPluginAction> actions;
 
-    @Getter
-    private String usage;
+	@Getter
+	private String usage;
 
-    @Getter
-    private String commandName;
+	@Getter
+	private String commandName;
 
-    LombokCommand(List<Class<? extends Annotation>> annotations, List<LombokPluginAction> actions) {
-        this.annotations = annotations;
-        this.actions = actions;
+	LombokCommand(List<Class<? extends Annotation>> annotations, List<LombokPluginAction> actions) {
+		this.annotations = annotations;
+		this.actions = actions;
 
-        commandName = LombokPlugin.OPTION_NAME + ":" + name().toLowerCase();
+		commandName = LombokPlugin.OPTION_NAME + ":" + name().toLowerCase();
 
-        StringBuilder stringBuilder = new StringBuilder();
-        stringBuilder.append(StringUtils.rightPad(commandName, 30));
-        stringBuilder.append("add Lombok ").append(annotations.stream().map(aClass -> aClass.getSimpleName()).map(s -> "@".concat(s)).collect(Collectors.joining(", ")).toString());
-        if (annotations.size() == 1) {
-            stringBuilder.append(" annotation");
-        } else {
-            stringBuilder.append(" annotations");
-        }
-        usage = stringBuilder.toString();
-    }
+		StringBuilder stringBuilder = new StringBuilder();
+		stringBuilder.append(StringUtils.rightPad(commandName, 30));
+		stringBuilder.append("add Lombok ")
+				.append(annotations.stream().map(aClass -> aClass.getSimpleName()).map(s -> "@".concat(s)).collect(Collectors.joining(", ")).toString());
+		if (annotations.size() == 1) {
+			stringBuilder.append(" annotation");
+		} else {
+			stringBuilder.append(" annotations");
+		}
+		usage = stringBuilder.toString();
+	}
 
-    public void exec(JDefinedClass generatedClass) {
-        for (Class<? extends Annotation> lombokAnnotation : annotations) {
-            generatedClass.annotate(lombokAnnotation);
-        }
+	public void exec(JDefinedClass generatedClass) {
+		for (Class<? extends Annotation> lombokAnnotation : annotations) {
+			if (lombokAnnotation == Builder.class) {
+				generatedClass.annotate(lombokAnnotation).param("builderMethodName", "builderFor" + generatedClass.name());
+			} else if (lombokAnnotation == NoArgsConstructor.class || lombokAnnotation == AllArgsConstructor.class) {
+				if (generatedClass.fields().size() > 0) {
+					generatedClass.annotate(lombokAnnotation);
+				}
+			} else {
+				generatedClass.annotate(lombokAnnotation);
+			}
+		}
 
-        if (actions != null && !actions.isEmpty()) {
-            actions.forEach(lombokPluginAction -> lombokPluginAction.execute(generatedClass));
-        }
-    }
+		if (actions != null && !actions.isEmpty()) {
+			actions.forEach(lombokPluginAction -> lombokPluginAction.execute(generatedClass));
+		}
+	}
 }
